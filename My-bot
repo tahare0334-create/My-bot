@@ -1,0 +1,86 @@
+import json
+import os
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+
+TOKEN = "8999438350:AAFA3Jst28_aSR3nHQIWAsL-TIKy16BBIeM" 
+CHANNEL_USERNAME = "@n12hanemeo"
+DATA_FILE = "players.json"
+players = {}
+
+def load_players():
+    global players
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE,"r",encoding="utf-8") as f:
+            players=json.load(f)
+    else:
+        players={}
+
+def save_players():
+    with open(DATA_FILE,"w",encoding="utf-8") as f:
+        json.dump(players,f,indent=4)
+
+async def check_join(update, context):
+    m = await context.bot.get_chat_member(CHANNEL_USERNAME, update.effective_user.id)
+    if m.status in ("left","kicked"):
+        await update.message.reply_text("🚀 ابتدا عضو کانال شوید:\nhttps://t.me/n12hanemeo")
+        return False
+    return True
+
+async def start(update:Update, context:ContextTypes.DEFAULT_TYPE):
+    if not await check_join(update,context): return
+    u=update.effective_user
+    uid=str(u.id)
+    if uid not in players:
+        players[uid]={"name":u.first_name,"level":1,"xp":0,"coins":100,"hp":100}
+        save_players()
+    await update.message.reply_text(
+f"🥷 Welcome {u.first_name}!\n\n🎮 Naruto RPG\n\n/profile\n/train\n/mission\n/help")
+
+async def profile(update,context):
+    if not await check_join(update,context): return
+    uid=str(update.effective_user.id)
+    if uid not in players:
+        await update.message.reply_text("اول /start را بزن."); return
+    p=players[uid]
+    await update.message.reply_text(f"👤 {p['name']}\n⭐ Level: {p['level']}\n✨ XP: {p['xp']}\n🪙 Coins: {p['coins']}\n❤️ HP: {p['hp']}")
+
+async def train(update,context):
+    if not await check_join(update,context): return
+    uid=str(update.effective_user.id)
+    if uid not in players:
+        await update.message.reply_text("اول /start را بزن."); return
+    p=players[uid]; p["xp"]+=20
+    if p["xp"]>=p["level"]*100:
+        p["xp"]=0; p["level"]+=1; p["coins"]+=50
+        await update.message.reply_text(f"🎉 اکنون Level {p['level']} هستی.")
+    else:
+        await update.message.reply_text("💪 +20 XP")
+    save_players()
+
+async def mission(update,context):
+    if not await check_join(update,context): return
+    uid=str(update.effective_user.id)
+    if uid not in players:
+        await update.message.reply_text("اول /start را بزن."); return
+    p=players[uid]; p["coins"]+=30; p["xp"]+=10; save_players()
+    await update.message.reply_text("✅ مأموریت انجام شد!\n🪙 +30 Coins\n✨ +10 XP")
+
+async def help_command(update,context):
+    if not await check_join(update,context): return
+    await update.message.reply_text("/start\n/profile\n/train\n/mission")
+
+def main():
+    load_players()
+    app=Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start",start))
+    app.add_handler(CommandHandler("profile",profile))
+    app.add_handler(CommandHandler("train",train))
+    app.add_handler(CommandHandler("mission",mission))
+    app.add_handler(CommandHandler("help",help_command))
+    print("Naruto RPG Bot Started...")
+    app.run_polling()
+
+if __name__=="__main__":
+    main()
+
