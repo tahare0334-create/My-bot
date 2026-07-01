@@ -1,0 +1,103 @@
+import logging
+import json
+import os
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+
+from config import TOKEN
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
+
+DATA_FILE = "users.json"
+
+
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r") as f:
+        return json.load(f)
+
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+
+    data = load_data()
+
+    if user_id not in data:
+        data[user_id] = {
+            "name": update.effective_user.first_name,
+            "score": 0
+        }
+        save_data(data)
+
+    keyboard = [
+        [InlineKeyboardButton("🚀 شروع بازی", callback_data="start_game")],
+        [InlineKeyboardButton("👤 پروفایل", callback_data="profile")],
+        [InlineKeyboardButton("ℹ️ راهنما", callback_data="help")]
+    ]
+
+    await update.message.reply_text(
+        "👋 سلام!\nیکی از گزینه‌ها را انتخاب کن:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    user_id = str(query.from_user.id)
+    data = load_data()
+
+    if user_id not in data:
+        data[user_id] = {"name": query.from_user.first_name, "score": 0}
+
+    if query.data == "start_game":
+        data[user_id]["score"] += 1
+        save_data(data)
+
+        await query.edit_message_text(
+            f"🎮 بازی انجام شد!\n⭐ +1 امتیاز گرفتی\n\nامتیاز فعلی: {data[user_id]['score']}"
+        )
+
+    elif query.data == "profile":
+        user = data[user_id]
+
+        await query.edit_message_text(
+            f"👤 پروفایل شما:\n\n"
+            f"نام: {user['name']}\n"
+            f"امتیاز: {user['score']}"
+        )
+
+    elif query.data == "help":
+        await query.edit_message_text(
+            "ℹ️ راهنما:\n"
+            "- دکمه‌ها را انتخاب کن\n"
+            "- بازی امتیاز میده\n"
+            "- /start برای شروع دوباره"
+        )
+
+    else:
+        await query.edit_message_text("❌ گزینه نامعتبر")
+
+
+def main():
+    app = Application.builder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("Bot is running...")
+    app.run_polling()
+
+
+if __name__ == "__main__":
+    main()
